@@ -1,5 +1,3 @@
-setwd("~/Swetha/SWE PERSONAL/YALE/ACADS/Big Data/HW")
-
 install.packages("ROCR")
 
 library(readxl)
