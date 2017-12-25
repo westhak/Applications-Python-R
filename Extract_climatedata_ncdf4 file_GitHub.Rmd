@@ -1,0 +1,146 @@
+---
+title: Extract temperature and precipitation data from netcdf file
+author: "Swetha Kolluri"
+date: "June 19, 2017"
+output: html_document
+---
+
+```{r setup}
+require(knitr)
+opts_chunk$set(echo=TRUE, message=FALSE, warning=FALSE, error=TRUE)
+opts_knit$set(root.dir = '~/IndiaTemp')
+
+```
+
+Task: Extract Data from monthly global gridded high resolution station (land) data for air temperature and precipitation from 1900-2014.
+
+Data has 0.5 degree latitude x 0.5 degree longitude global grid (720x360).
+
+```{r warning=FALSE}
+library(ncdf4)
+library(raster)
+library(maptools)
+library(maps)
+library(chron)
+library(Matrix)
+```
+
+Download the data from https://www.esrl.noaa.gov/psd/data/gridded/data.UDel_AirT_Precip.html
+
+```{r warning=FALSE}
+#Surface Air Temperature (deg C) for Monthly values for 1901/01 - 2014/12 V4.01.
+
+nc <- ncdf4::nc_open("NOAA/air.mon.mean.v401.nc")
+
+lon <- ncdf4::ncvar_get(nc,"lon")
+nlon <- dim(lon)
+range(lon)
+head(lon)
+
+lat <- ncdf4::ncvar_get(nc,"lat",verbose=F)
+nlat <- dim(lat)
+range(lat)
+head(lat)
+
+print(c(nlon,nlat))
+
+t <- ncdf4::ncvar_get(nc,"time")
+#time > name,len,unlim,group_index,group_id,id,dimvarid (id,group_index,group_id,list_index,isdimvar), units, vals, create_dimvar
+
+class(t)
+
+#Number of months between 1900/01 and 2014/12
+nt <- dim(t)
+n.months <- (2014+1-1900)*12
+
+```
+
+
+Temperature Array
+```{r warning=FALSE}
+
+# ncwatt_get() function gets an attribute from a variable (netCDF variable) or a global attribute (file attribute) from a netCDF file, if the passed argument "varid" is zero). Multiple attributes are returned in a vector.
+
+dname <- "air"
+tmp.array <- ncdf4::ncvar_get(nc, dname)
+
+#dlname <- ncatt_get(nc, dname, "long_name")
+#dunits <- ncatt_get(nc, dname, "units")
+#fillvalue <- ncatt_get(nc, dname, "_FillValue")
+
+dim(tmp.array)
+```
+
+
+Time Calculation
+```{r warning=FALSE}
+#Calculating number of months from the survey date w.ref.to 1900-01-01, 00:00:00
+#Enter t1 and t2 in the format dd/mm/yyyy
+
+t0 <- as.Date('1/1/1900',format='%d/%m/%Y')
+t1 <- as.Date('1/07/2012',format='%d/%m/%Y')
+t2 <- as.Date('30/12/2012',format='%d/%m/%Y')
+
+
+calc_months <- function(end_date, start_date) {
+    ed <- as.POSIXlt(end_date)
+    sd <- as.POSIXlt(start_date)
+    12 * (ed$year - sd$year) + (ed$mon - sd$mon)+1
+}
+
+m1 <- calc_months(t1,t0)
+m2 <- calc_months(t2,t0)
+```
+
+Extracting Temperature data for each month 
+```{r warning=FALSE}
+tmp.df <- data.frame(expand.grid(lon, lat))
+names(tmp.df) <- c("lon","lat")
+
+#Time Slicing: Extract data for each month
+for(m in m1:m2)
+{
+
+#length(na.omit(as.vector(tmp.array[, , m])))
+tmp.slice <- tmp.array[, , m]
+
+tmp.vec <- as.vector(tmp.slice)
+#length(tmp.vec)
+
+tmp.df <- data.frame(cbind(tmp.df, tmp.vec))
+n <- paste0("temp_","Month_",m-m1+1)
+c <- m-m1+3
+names(tmp.df)[c] <- n
+}
+
+```
+
+Extract India data
+```{r warning=FALSE}
+str(tmp.df)
+
+dim(tmp.df)-dim(na.omit(tmp.df))
+tmp.df <- na.omit(tmp.df)
+
+range(tmp.df$lon)
+range(tmp.df$lat)
+
+
+#Latitudes of the country
+tmp.India <- tmp.df[which(tmp.df$lat<= 37.6 & tmp.df$lat >= 8.4),]
+dim(tmp.India)-dim(na.omit(tmp.India))
+
+#Longitudes of the country
+tmp.India <- tmp.India[which(tmp.India$lon<= 97.25 & tmp.India$lon >= 68.7),]
+dim(tmp.India) - dim(na.omit(tmp.India))
+head(tmp.India)
+```
+
+SAVE in appropriate folder
+```{r}
+save(tmp.India, file="~/temp.India.Kharif.2012.Rda")
+#write.csv(tmp.India,"~/Temp_India_Jun2012_Jul2013.csv",row.names = FALSE)
+
+```
+
+
